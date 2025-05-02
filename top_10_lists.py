@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
+import os
 from collections import defaultdict
 
 # Configuration
@@ -18,20 +19,26 @@ CACHE_DURATION_HOURS = 12
 # Helper functions
 def load_cache():
     try:
-        with open(CACHE_FILE, "r") as f:
-            cache = json.load(f)
-            if (time.time() - cache["timestamp"]) < (CACHE_DURATION_HOURS * 3600):
-                return cache["data"]
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "r") as f:
+                cache = json.load(f)
+                if (time.time() - cache["timestamp"]) < (CACHE_DURATION_HOURS * 3600):
+                    return cache["data"]
+    except Exception as e:
+        st.warning(f"Cache loading error: {e}")
     return None
 
 def save_cache(data):
-    with open(CACHE_FILE, "w") as f:
-        json.dump({"timestamp": time.time(), "data": data}, f)
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump({"timestamp": time.time(), "data": data}, f)
+    except Exception as e:
+        st.error(f"Error saving cache: {e}")
 
 def clean_title(title):
     """Normalize titles for better matching"""
+    if not title:
+        return ""
     return title.lower().replace(":", "").replace("-", " ").strip()
 
 # Scraping functions
@@ -55,24 +62,29 @@ def get_imdb_top(category, media_type="movie"):
     
     try:
         response = requests.get(base_url, params=params, headers=HEADERS, timeout=10)
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         
         results = []
         items = soup.select(".lister-item")[:10]
         
         for item in items:
-            title_elem = item.find("h3", class_="lister-item-header")
-            title = title_elem.find("a").text.strip() if title_elem else "N/A"
-            
-            rating_elem = item.find("div", class_="ratings-imdb-rating")
-            rating = rating_elem.find("strong").text.strip() if rating_elem else "N/A"
-            
-            if title != "N/A":
-                results.append({
-                    "title": title,
-                    "imdb": rating,
-                    "source": "IMDb"
-                })
+            try:
+                title_elem = item.find("h3", class_="lister-item-header")
+                title = title_elem.find("a").text.strip() if title_elem else "N/A"
+                
+                rating_elem = item.find("div", class_="ratings-imdb-rating")
+                rating = rating_elem.find("strong").text.strip() if rating_elem else "N/A"
+                
+                if title != "N/A":
+                    results.append({
+                        "title": title,
+                        "imdb": rating,
+                        "source": "IMDb"
+                    })
+            except Exception as e:
+                st.warning(f"Error processing IMDb item: {e}")
+                continue
         
         return results
     except Exception as e:
@@ -94,24 +106,29 @@ def get_rotten_tomatoes_top(category, media_type="movie"):
     
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         
         results = []
         tiles = soup.select("div[data-qa='discovery-media-list-item']")[:10]
         
         for tile in tiles:
-            title_elem = tile.find("span", {"data-qa": "discovery-media-list-item-title"})
-            title = title_elem.text.strip() if title_elem else "N/A"
-            
-            score = tile.find("score-pairs")
-            rating = score["criticsscore"] if score and "criticsscore" in score.attrs else "N/A"
-            
-            if title != "N/A":
-                results.append({
-                    "title": title,
-                    "rotten_tomatoes": f"{rating}%" if rating != "N/A" else rating,
-                    "source": "Rotten Tomatoes"
-                })
+            try:
+                title_elem = tile.find("span", {"data-qa": "discovery-media-list-item-title"})
+                title = title_elem.text.strip() if title_elem else "N/A"
+                
+                score = tile.find("score-pairs")
+                rating = score["criticsscore"] if score and "criticsscore" in score.attrs else "N/A"
+                
+                if title != "N/A":
+                    results.append({
+                        "title": title,
+                        "rotten_tomatoes": f"{rating}%" if rating != "N/A" else rating,
+                        "source": "Rotten Tomatoes"
+                    })
+            except Exception as e:
+                st.warning(f"Error processing Rotten Tomatoes item: {e}")
+                continue
         
         return results
     except Exception as e:
@@ -123,67 +140,68 @@ def merge_sources(movie_data, tv_data):
     """Combine data from multiple sources"""
     combined = defaultdict(dict)
     
-    # Process movie data
     for category in CATEGORIES:
-        # Movies
-        all_movies = []
-        seen_titles = set()
+        # Process movies
+        movie_entries = []
+        seen_movie_titles = set()
         
-        for source in movie_data[category].values():
+        for source in movie_data.get(category, {}).values():
             for item in source:
-                clean = clean_title(item["title"])
-                if clean not in seen_titles:
-                    merged_item = {
-                        "title": item["title"],
+                clean = clean_title(item.get("title", ""))
+                if clean and clean not in seen_movie_titles:
+                    movie_entries.append({
+                        "title": item.get("title", "N/A"),
                         "imdb": item.get("imdb", "N/A"),
                         "rotten_tomatoes": item.get("rotten_tomatoes", "N/A")
-                    }
-                    all_movies.append(merged_item)
-                    seen_titles.add(clean)
+                    })
+                    seen_movie_titles.add(clean)
         
-        combined[category]["movies"] = all_movies[:10]
+        combined[category]["movies"] = movie_entries[:10]
         
-        # TV Series
-        all_series = []
-        seen_titles = set()
+        # Process TV series
+        series_entries = []
+        seen_series_titles = set()
         
-        for source in tv_data[category].values():
+        for source in tv_data.get(category, {}).values():
             for item in source:
-                clean = clean_title(item["title"])
-                if clean not in seen_titles:
-                    merged_item = {
-                        "title": item["title"],
+                clean = clean_title(item.get("title", ""))
+                if clean and clean not in seen_series_titles:
+                    series_entries.append({
+                        "title": item.get("title", "N/A"),
                         "imdb": item.get("imdb", "N/A"),
                         "rotten_tomatoes": item.get("rotten_tomatoes", "N/A")
-                    }
-                    all_series.append(merged_item)
-                    seen_titles.add(clean)
+                    })
+                    seen_series_titles.add(clean)
         
-        combined[category]["series"] = all_series[:10]
+        combined[category]["series"] = series_entries[:10]
     
     return combined
 
 def fetch_all_data():
     """Fetch data from all sources"""
-    cached = load_cache()
-    if cached:
-        return cached
-    
-    movie_data = defaultdict(dict)
-    tv_data = defaultdict(dict)
-    
-    for category in CATEGORIES:
-        # Fetch movie data
-        movie_data[category]["imdb"] = get_imdb_top(category, "movie")
-        movie_data[category]["rt"] = get_rotten_tomatoes_top(category, "movie")
+    try:
+        cached = load_cache()
+        if cached:
+            return cached
         
-        # Fetch TV data
-        tv_data[category]["imdb"] = get_imdb_top(category, "tv")
-        tv_data[category]["rt"] = get_rotten_tomatoes_top(category, "tv")
-    
-    combined = merge_sources(movie_data, tv_data)
-    save_cache(combined)
-    return combined
+        movie_data = defaultdict(dict)
+        tv_data = defaultdict(dict)
+        
+        for category in CATEGORIES:
+            # Fetch movie data
+            movie_data[category]["imdb"] = get_imdb_top(category, "movie")
+            movie_data[category]["rt"] = get_rotten_tomatoes_top(category, "movie")
+            
+            # Fetch TV data
+            tv_data[category]["imdb"] = get_imdb_top(category, "tv")
+            tv_data[category]["rt"] = get_rotten_tomatoes_top(category, "tv")
+        
+        combined = merge_sources(movie_data, tv_data)
+        save_cache(combined)
+        return combined
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return defaultdict(dict)
 
 # Streamlit UI
 def main():
@@ -195,7 +213,11 @@ def main():
     
     if st.button("Refresh Data"):
         if os.path.exists(CACHE_FILE):
-            os.remove(CACHE_FILE)
+            try:
+                os.remove(CACHE_FILE)
+                st.success("Cache cleared successfully!")
+            except Exception as e:
+                st.error(f"Error clearing cache: {e}")
         st.experimental_rerun()
     
     data = fetch_all_data()
