@@ -12,23 +12,35 @@ CACHE_DURATION = timedelta(days=1)
 
 # Headers for web scraping
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537. Roslyn/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 
 # Function to load cached data
 def load_cache():
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "rb") as f:
-            cache = pickle.load(f)
-            if datetime.now() - cache["timestamp"] < CACHE_DURATION:
-                return cache["data"]
+        try:
+            with open(CACHE_FILE, "rb") as f:
+                cache = pickle.load(f)
+                if datetime.now() - cache["timestamp"] < CACHE_DURATION:
+                    # Validate cache structure
+                    for category, data in cache["data"].items():
+                        if not isinstance(data, dict) or "movies" not in data or "series" not in data:
+                            st.warning(f"Invalid cache structure for {category}. Fetching new data.")
+                            return None
+                    return cache["data"]
+        except Exception as e:
+            st.warning(f"Error loading cache: {e}. Fetching new data.")
+            return None
     return None
 
 # Function to save data to cache
 def save_cache(data):
     cache = {"timestamp": datetime.now(), "data": data}
-    with open(CACHE_FILE, "wb") as f:
-        pickle.dump(cache, f)
+    try:
+        with open(CACHE_FILE, "wb") as f:
+            pickle.dump(cache, f)
+    except Exception as e:
+        st.error(f"Error saving cache: {e}")
 
 # Function to scrape Rotten Tomatoes for top movies/series by category
 def scrape_rotten_tomatoes(category):
@@ -47,7 +59,7 @@ def scrape_rotten_tomatoes(category):
         response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("a", class_="js-tile-link")[:20]  # Get extra items to cover both movies and series
+        items = soup.find_all("a", class_="js-tile-link")[:20]  # Get extra items
         results = []
         for item in items:
             title = item.find("span", class_="p--small").text.strip() if item.find("span", class_="p--small") else "N/A"
@@ -115,7 +127,6 @@ def merge_data(rt_data, imdb_data, max_items=10):
         title = rt_item["title"]
         if title not in seen_titles:
             merged_item = {"title": title, "rotten_tomatoes": rt_item["rotten_tomatoes"], "imdb": "N/A"}
-            # Look for matching IMDb entry
             for imdb_item in imdb_data:
                 if title.lower() in imdb_item["title"].lower() or imdb_item["title"].lower() in title.lower():
                     merged_item["imdb"] = imdb_item["imdb"]
@@ -123,7 +134,7 @@ def merge_data(rt_data, imdb_data, max_items=10):
             merged.append(merged_item)
             seen_titles.add(title)
 
-    # Add remaining IMDb items to reach max_items
+    # Add remaining IMDb items
     for imdb_item in imdb_data:
         title = imdb_item["title"]
         if title not in seen_titles and len(merged) < max_items:
@@ -159,16 +170,24 @@ st.title("Top 10 Movies and Series by Category")
 st.write("Updated daily with ratings from IMDb and Rotten Tomatoes")
 
 # Fetch data
-top_10_lists = fetch_top_10_lists()
+try:
+    top_10_lists = fetch_top_10_lists()
+except Exception as e:
+    st.error(f"Error fetching data: {e}")
+    top_10_lists = {}
 
 # Display data for each category
 for category, data in top_10_lists.items():
     st.subheader(category)
+    if not isinstance(data, dict):
+        st.error(f"Invalid data for {category}. Skipping.")
+        continue
 
     # Movies
     st.markdown(f"**Movies**")
-    if data["movies"]:
-        df = pd.DataFrame(data["movies"])
+    movies = data.get("movies", [])
+    if movies:
+        df = pd.DataFrame(movies)
         df.index = df.index + 1  # 1-based indexing
         st.table(df[["title", "imdb", "rotten_tomatoes"]])
     else:
@@ -176,8 +195,9 @@ for category, data in top_10_lists.items():
 
     # Series
     st.markdown(f"**TV Series**")
-    if data["series"]:
-        df = pd.DataFrame(data["series"])
+    series = data.get("series", [])
+    if series:
+        df = pd.DataFrame(series)
         df.index = df.index + 1  # 1-based indexing
         st.table(df[["title", "imdb", "rotten_tomatoes"]])
     else:
