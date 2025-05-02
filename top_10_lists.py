@@ -245,7 +245,7 @@ def main():
             except Exception as e:
                 st.error(f"Error clearing cache: {e}")
         time.sleep(1)
-        st.experimental_rerun()
+        st.rerun()
     
     data = fetch_all_data()
     
