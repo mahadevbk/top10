@@ -3,15 +3,6 @@ import requests
 
 st.set_page_config(layout="centered")
 
-# Custom CSS to center text
-st.markdown("""
-    <style>
-    .centered {
-        text-align: center;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Display the poster image at the top
 st.image("top10image.png", use_container_width=223)
 
