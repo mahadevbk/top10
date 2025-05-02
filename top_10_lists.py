@@ -93,16 +93,12 @@ def get_imdb_top(category, media_type="movie"):
 
 def get_rotten_tomatoes_top(category, media_type="movie"):
     """Get top from Rotten Tomatoes"""
-    genre_map = {
-        "Action": "action__adventure",
-        "Comedy": "comedy",
-        "Drama": "drama",
-        "Sci-Fi": "science_fiction__fantasy",
-        "Thriller": "mystery__thriller"
-    }
-    
-    media_path = "movies" if media_type == "movie" else "tv"
-    url = f"https://www.rottentomatoes.com/browse/{media_path}_at_home/sort:popular?genres={genre_map.get(category, category.lower())}"
+    # Updated URL structure for Rotten Tomatoes
+    if media_type == "movie":
+        url = f"https://www.rottentomatoes.com/browse/movies_in_theaters/genres:{category.lower()}"
+    else:
+        # For TV shows, we'll use the general TV browse page and filter in code
+        url = "https://www.rottentomatoes.com/browse/tv_series_browse"
     
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -110,12 +106,25 @@ def get_rotten_tomatoes_top(category, media_type="movie"):
         soup = BeautifulSoup(response.text, "html.parser")
         
         results = []
-        tiles = soup.select("div[data-qa='discovery-media-list-item']")[:10]
         
-        for tile in tiles:
+        # Different selectors for movies vs TV
+        if media_type == "movie":
+            tiles = soup.select("div[data-qa='discovery-media-list-item']")[:20]
+        else:
+            tiles = soup.select("div[data-qa='discovery-media-list-item']")[:20]
+        
+        for tile in tiles[:10]:  # Limit to 10 items
             try:
                 title_elem = tile.find("span", {"data-qa": "discovery-media-list-item-title"})
                 title = title_elem.text.strip() if title_elem else "N/A"
+                
+                # Get genre information to filter TV shows
+                genre_elems = tile.find_all("span", class_="genre")
+                genres = [g.text.strip().lower() for g in genre_elems] if genre_elems else []
+                
+                # Skip if this is a TV show and doesn't match our category
+                if media_type == "tv" and category.lower() not in " ".join(genres):
+                    continue
                 
                 score = tile.find("score-pairs")
                 rating = score["criticsscore"] if score and "criticsscore" in score.attrs else "N/A"
@@ -192,9 +201,9 @@ def fetch_all_data():
             movie_data[category]["imdb"] = get_imdb_top(category, "movie")
             movie_data[category]["rt"] = get_rotten_tomatoes_top(category, "movie")
             
-            # Fetch TV data
+            # Fetch TV data - only from IMDb for now as Rotten Tomatoes is unreliable
             tv_data[category]["imdb"] = get_imdb_top(category, "tv")
-            tv_data[category]["rt"] = get_rotten_tomatoes_top(category, "tv")
+            # tv_data[category]["rt"] = get_rotten_tomatoes_top(category, "tv")
         
         combined = merge_sources(movie_data, tv_data)
         save_cache(combined)
@@ -215,7 +224,7 @@ def main():
         if os.path.exists(CACHE_FILE):
             try:
                 os.remove(CACHE_FILE)
-                st.success("Cache cleared successfully!")
+                st.success("Cache cleared successfully! Refreshing data...")
             except Exception as e:
                 st.error(f"Error clearing cache: {e}")
         st.experimental_rerun()
