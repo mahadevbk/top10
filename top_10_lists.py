@@ -98,7 +98,7 @@ def fetch_rt_titles(genre_name):
 # ---- STREAMLIT LAYOUT ----
 
 st.set_page_config(layout="centered")
-st.image("top10image.png", use_container_width=True)
+#st.image("top10image.png", use_container_width=True)
 
 st.markdown("<h1 style='text-align: center;'>🎬 Top 10 Movies & TV Shows</h1>", unsafe_allow_html=True)
 
