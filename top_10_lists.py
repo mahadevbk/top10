@@ -1,18 +1,19 @@
 import streamlit as st
 import requests
 
-API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # <-- Replace this with your key
+API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # <-- Insert your TMDB API key here
 BASE_URL = "https://api.themoviedb.org/3"
 
-GENRES = {
-    "Thriller": 53,
-    "Medical Dramas": 18,  # No strict category for "Medical", so we use Drama
-    "Comedy": 35,
-    "Murder Mystery": 9648,  # Mystery
-    "Sci-Fi": 878
-}
+# Fetch available genres from TMDB
+@st.cache_data
+def fetch_genres(media_type='movie'):
+    url = f"{BASE_URL}/genre/{media_type}/list"
+    response = requests.get(url, params={"api_key": API_KEY, "language": "en-US"})
+    data = response.json()
+    return {genre["name"]: genre["id"] for genre in data.get("genres", [])}
 
-def fetch_tmdb_list(genre_id, media_type='movie'):
+# Fetch top titles based on genre and type
+def fetch_titles(genre_id, media_type='movie'):
     url = f"{BASE_URL}/discover/{media_type}"
     params = {
         "api_key": API_KEY,
@@ -24,30 +25,34 @@ def fetch_tmdb_list(genre_id, media_type='movie'):
         "first_air_date.gte": "2020-01-01" if media_type == "tv" else None
     }
     response = requests.get(url, params=params)
-    data = response.json()
-    return data.get("results", [])[:10]  # Top 10
+    return response.json().get("results", [])[:10]
 
-st.title("🎬 Recent Top Movies & TV Series by Genre (via TMDB API)")
+st.title("🎥 Recent Movies & TV Series by Genre (IMDb-style via TMDB)")
 
-genre_name = st.selectbox("Select a Genre", list(GENRES.keys()))
-genre_id = GENRES[genre_name]
+# Let user choose between movies and TV
+media_type = st.radio("Select Media Type", ["movie", "tv"])
 
-st.subheader(f"🎬 Top 10 Recent {genre_name} Movies")
-movies = fetch_tmdb_list(genre_id, "movie")
-if not movies:
-    st.write("No recent movies found.")
-for movie in movies:
-    st.markdown(f"**{movie['title']} ({movie.get('release_date', 'N/A')[:4]})**")
-    st.markdown(f"Rating: {movie.get('vote_average', 'N/A')}/10")
-    st.markdown(f"[View on TMDB](https://www.themoviedb.org/movie/{movie['id']})")
-    st.markdown("---")
+# Dynamically load genres for the selected media type
+genres = fetch_genres(media_type)
+genre_name = st.selectbox("Select a Genre", list(genres.keys()))
+genre_id = genres[genre_name]
 
-st.subheader(f"📺 Top 10 Recent {genre_name} TV Series")
-series = fetch_tmdb_list(genre_id, "tv")
-if not series:
-    st.write("No recent TV shows found.")
-for show in series:
-    st.markdown(f"**{show['name']} ({show.get('first_air_date', 'N/A')[:4]})**")
-    st.markdown(f"Rating: {show.get('vote_average', 'N/A')}/10")
-    st.markdown(f"[View on TMDB](https://www.themoviedb.org/tv/{show['id']})")
-    st.markdown("---")
+# Display recent titles
+title_type = "Movies" if media_type == "movie" else "TV Series"
+st.subheader(f"🔥 Top 10 Recent {genre_name} {title_type}")
+
+titles = fetch_titles(genre_id, media_type)
+if not titles:
+    st.write("No recent titles found.")
+else:
+    for title in titles:
+        name = title.get("title") or title.get("name")
+        year = title.get("release_date", "")[:4] or title.get("first_air_date", "")[:4]
+        rating = title.get("vote_average", "N/A")
+        tmdb_id = title.get("id")
+        link = f"https://www.themoviedb.org/{media_type}/{tmdb_id}"
+
+        st.markdown(f"**{name} ({year})**")
+        st.markdown(f"⭐ Rating: {rating}/10")
+        st.markdown(f"[🔗 View on TMDB]({link})")
+        st.markdown("---")
