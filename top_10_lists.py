@@ -6,7 +6,7 @@ import pytz
 
 # ---- CONFIGURATION ----
 TMDB_API_KEY = "a7cb59b552915493b4103cd95c5285dd"
-OMDB_API_KEY = "YOUR_OMDB_API_KEY"
+OMDB_API_KEY = "e3f26c76"
 TIMEZONE = pytz.timezone("Asia/Dubai")  # UTC+4
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
