@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 # Display the poster image at the top
-st.image("top10image.png", use_column_width=True)
+st.image("top10image.png", use_container_width=True)
 
 API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # <-- Insert your TMDB API key here
 BASE_URL = "https://api.themoviedb.org/3"
