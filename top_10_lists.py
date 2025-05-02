@@ -4,10 +4,10 @@ import requests
 API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # Replace with your TMDB API key
 BASE_URL = "https://api.themoviedb.org/3"
 
-st.set_page_config(page_title="Top 10 Movies & TV", layout="centered")
+st.set_page_config(layout="centered")
 
 # --- Display Top Image ---
-# st.image("top10image.png")  # <-- Add your top image file path here
+#st.image("top10image.png", use_container_width=True)  # <-- Add your top image file path here
 
 @st.cache_data
 def fetch_genres(media_type='movie'):
@@ -21,7 +21,7 @@ def fetch_titles(genre_id, media_type='movie'):
         "api_key": API_KEY,
         "with_genres": genre_id,
         "sort_by": "popularity.desc",
-        "language": "en-US",
+        "language": "en-US",  # Filters content to English only
         "page": 1,
         "primary_release_date.gte": "2020-01-01" if media_type == "movie" else None,
         "first_air_date.gte": "2020-01-01" if media_type == "tv" else None
@@ -62,7 +62,7 @@ else:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if poster_url:
-                st.image(poster_url,  use_container_width=True)
+                st.image(poster_url, use_column_width=True)
             st.markdown(f"<h4 style='text-align: center;'>{name} ({year})</h4>", unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center;'>⭐ Rating: {rating}/10</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center;'><a href='{link}' target='_blank'>🔗 View on TMDB</a></p>", unsafe_allow_html=True)
