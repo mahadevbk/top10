@@ -5,6 +5,11 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pickle
 import os
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Cache file to store scraped data
 CACHE_FILE = "movie_series_cache.pkl"
@@ -22,7 +27,6 @@ def load_cache():
             with open(CACHE_FILE, "rb") as f:
                 cache = pickle.load(f)
                 if datetime.now() - cache["timestamp"] < CACHE_DURATION:
-                    # Validate cache structure
                     for category, data in cache["data"].items():
                         if not isinstance(data, dict) or "movies" not in data or "series" not in data:
                             st.warning(f"Invalid cache structure for {category}. Fetching new data.")
@@ -59,13 +63,19 @@ def scrape_rotten_tomatoes(category):
         response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("a", class_="js-tile-link")[:20]  # Get extra items
+        # Updated selector based on likely Rotten Tomatoes structure
+        items = soup.find_all("div", class_="discovery-tiles__wrap")[:20]  # Broad container
         results = []
         for item in items:
-            title = item.find("span", class_="p--small").text.strip() if item.find("span", class_="p--small") else "N/A"
-            rating = item.find("score-pairs")["criticsscore"] if item.find("score-pairs") and item.find("score-pairs")["criticsscore"] else "N/A"
-            results.append({"title": title, "rotten_tomatoes": f"{rating}%"})
-        return results
+            title_elem = item.find("span", class_="p--small")
+            title = title_elem.text.strip() if title_elem else "N/A"
+            # Updated rating extraction
+            rating_elem = item.find("rt-text", class_="critics-score")
+            rating = rating_elem.text.strip().replace("%", "") if rating_elem else "N/A"
+            if title != "N/A":
+                results.append({"title": title, "rotten_tomatoes": f"{rating}%"})
+        logger.info(f"Scraped {len(results)} items from Rotten Tomatoes for {category}")
+        return results[:20]
     except requests.exceptions.HTTPError as e:
         st.error(f"HTTP Error scraping Rotten Tomatoes for {category}: {e}")
         return []
@@ -101,14 +111,17 @@ def scrape_imdb(category, title_type):
         response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("div", class_="sc-b189961a-0 iqHBGn")[:10]
+        # Updated IMDb selector
+        items = soup.find_all("div", class_="sc-74a7d06-0 fzIRnQ")[:10]  # Updated class
         results = []
         for item in items:
             title_elem = item.find("h3", class_="ipc-title__text")
             title = title_elem.text.strip().split(".", 1)[-1].strip() if title_elem else "N/A"
             rating_elem = item.find("span", class_="ipc-rating-star--rating")
             rating = rating_elem.text.strip() if rating_elem else "N/A"
-            results.append({"title": title, "imdb": rating})
+            if title != "N/A":
+                results.append({"title": title, "imdb": rating})
+        logger.info(f"Scraped {len(results)} items from IMDb for {category} ({title_type})")
         return results
     except requests.exceptions.HTTPError as e:
         st.error(f"HTTP Error scraping IMDb for {category} ({title_type}): {e}")
@@ -122,23 +135,24 @@ def merge_data(rt_data, imdb_data, max_items=10):
     merged = []
     seen_titles = set()
 
-    # Start with Rotten Tomatoes data
-    for rt_item in rt_data:
-        title = rt_item["title"]
-        if title not in seen_titles:
-            merged_item = {"title": title, "rotten_tomatoes": rt_item["rotten_tomatoes"], "imdb": "N/A"}
-            for imdb_item in imdb_data:
-                if title.lower() in imdb_item["title"].lower() or imdb_item["title"].lower() in title.lower():
-                    merged_item["imdb"] = imdb_item["imdb"]
+    # Start with IMDb data to prioritize type-specific results
+    for imdb_item in imdb_data:
+        title = imdb_item["title"]
+        if title not in seen_titles and len(merged) < max_items:
+            merged_item = {"title": title, "imdb": imdb_item["imdb"], "rotten_tomatoes": "N/A"}
+            # Look for matching Rotten Tomatoes entry
+            for rt_item in rt_data:
+                if rt_item["title"].lower() in title.lower() or title.lower() in rt_item["title"].lower():
+                    merged_item["rotten_tomatoes"] = rt_item["rotten_tomatoes"]
                     break
             merged.append(merged_item)
             seen_titles.add(title)
 
-    # Add remaining IMDb items
-    for imdb_item in imdb_data:
-        title = imdb_item["title"]
+    # Add remaining Rotten Tomatoes items if needed
+    for rt_item in rt_data:
+        title = rt_item["title"]
         if title not in seen_titles and len(merged) < max_items:
-            merged.append({"title": title, "rotten_tomatoes": "N/A", "imdb": imdb_item["imdb"]})
+            merged.append({"title": title, "imdb": "N/A", "rotten_tomatoes": rt_item["rotten_tomatoes"]})
             seen_titles.add(title)
 
     return merged[:max_items]
@@ -147,13 +161,14 @@ def merge_data(rt_data, imdb_data, max_items=10):
 def fetch_top_10_lists():
     cached_data = load_cache()
     if cached_data:
+        logger.info("Using cached data")
         return cached_data
 
     categories = ["Thrillers", "Drama", "Comedy", "Sci-Fi"]
     top_10_lists = {}
 
     for category in categories:
-        st.write(f"Fetching data for {category}...")
+        logger.info(f"Fetching data for {category}")
         rt_data = scrape_rotten_tomatoes(category)
         imdb_movies = scrape_imdb(category, "movies")
         imdb_series = scrape_imdb(category, "series")
