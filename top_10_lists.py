@@ -12,7 +12,7 @@ CACHE_DURATION = timedelta(days=1)
 
 # Headers for web scraping
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537. Roslyn/537.36"
 }
 
 # Function to load cached data
@@ -30,7 +30,7 @@ def save_cache(data):
     with open(CACHE_FILE, "wb") as f:
         pickle.dump(cache, f)
 
-# Function to scrape Rotten Tomatoes for top 10 movies/series by category
+# Function to scrape Rotten Tomatoes for top movies/series by category
 def scrape_rotten_tomatoes(category):
     url_map = {
         "Thrillers": "https://www.rottentomatoes.com/browse/movies_at_home/genres:mystery_and_thriller",
@@ -45,9 +45,9 @@ def scrape_rotten_tomatoes(category):
 
     try:
         response = requests.get(url, headers=HEADERS)
-        response.raise_for_status()  # Raises error for 404, 500, etc.
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("a", class_="js-tile-link")[:10]  # Adjust class if needed
+        items = soup.find_all("a", class_="js-tile-link")[:20]  # Get extra items to cover both movies and series
         results = []
         for item in items:
             title = item.find("span", class_="p--small").text.strip() if item.find("span", class_="p--small") else "N/A"
@@ -61,15 +61,27 @@ def scrape_rotten_tomatoes(category):
         st.error(f"Error scraping Rotten Tomatoes for {category}: {e}")
         return []
 
-# Function to scrape IMDb for top 10 movies/series by category
-def scrape_imdb(category):
+# Function to scrape IMDb for top 10 movies or series by category
+def scrape_imdb(category, title_type):
     url_map = {
-        "Thrillers": "https://www.imdb.com/search/title/?genres=thriller&title_type=feature,tv_series&sort=user_rating,desc",
-        "Drama": "https://www.imdb.com/search/title/?genres=drama&title_type=feature,tv_series&sort=user_rating,desc",
-        "Comedy": "https://www.imdb.com/search/title/?genres=comedy&title_type=feature,tv_series&sort=user_rating,desc",
-        "Sci-Fi": "https://www.imdb.com/search/title/?genres=sci-fi&title_type=feature,tv_series&sort=user_rating,desc"
+        "Thrillers": {
+            "movies": "https://www.imdb.com/search/title/?genres=thriller&title_type=feature&sort=user_rating,desc",
+            "series": "https://www.imdb.com/search/title/?genres=thriller&title_type=tv_series&sort=user_rating,desc"
+        },
+        "Drama": {
+            "movies": "https://www.imdb.com/search/title/?genres=drama&title_type=feature&sort=user_rating,desc",
+            "series": "https://www.imdb.com/search/title/?genres=drama&title_type=tv_series&sort=user_rating,desc"
+        },
+        "Comedy": {
+            "movies": "https://www.imdb.com/search/title/?genres=comedy&title_type=feature&sort=user_rating,desc",
+            "series": "https://www.imdb.com/search/title/?genres=comedy&title_type=tv_series&sort=user_rating,desc"
+        },
+        "Sci-Fi": {
+            "movies": "https://www.imdb.com/search/title/?genres=sci-fi&title_type=feature&sort=user_rating,desc",
+            "series": "https://www.imdb.com/search/title/?genres=sci-fi&title_type=tv_series&sort=user_rating,desc"
+        }
     }
-    url = url_map.get(category)
+    url = url_map.get(category, {}).get(title_type)
     if not url:
         return []
 
@@ -77,7 +89,7 @@ def scrape_imdb(category):
         response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("div", class_="sc-b189961a-0 iqHBGn")[:10]  # Adjust class if needed
+        items = soup.find_all("div", class_="sc-b189961a-0 iqHBGn")[:10]
         results = []
         for item in items:
             title_elem = item.find("h3", class_="ipc-title__text")
@@ -87,17 +99,17 @@ def scrape_imdb(category):
             results.append({"title": title, "imdb": rating})
         return results
     except requests.exceptions.HTTPError as e:
-        st.error(f"HTTP Error scraping IMDb for {category}: {e}")
+        st.error(f"HTTP Error scraping IMDb for {category} ({title_type}): {e}")
         return []
     except Exception as e:
-        st.error(f"Error scraping IMDb for {category}: {e}")
+        st.error(f"Error scraping IMDb for {category} ({title_type}): {e}")
         return []
 
-# Function to merge data from both sources
-def merge_data(rt_data, imdb_data):
+# Function to merge data from both sources for movies or series
+def merge_data(rt_data, imdb_data, max_items=10):
     merged = []
     seen_titles = set()
-    
+
     # Start with Rotten Tomatoes data
     for rt_item in rt_data:
         title = rt_item["title"]
@@ -110,15 +122,15 @@ def merge_data(rt_data, imdb_data):
                     break
             merged.append(merged_item)
             seen_titles.add(title)
-    
-    # Add remaining IMDb items if not already included
+
+    # Add remaining IMDb items to reach max_items
     for imdb_item in imdb_data:
         title = imdb_item["title"]
-        if title not in seen_titles:
+        if title not in seen_titles and len(merged) < max_items:
             merged.append({"title": title, "rotten_tomatoes": "N/A", "imdb": imdb_item["imdb"]})
             seen_titles.add(title)
-    
-    return merged[:10]  # Limit to top 10
+
+    return merged[:max_items]
 
 # Main function to fetch or update data
 def fetch_top_10_lists():
@@ -132,9 +144,12 @@ def fetch_top_10_lists():
     for category in categories:
         st.write(f"Fetching data for {category}...")
         rt_data = scrape_rotten_tomatoes(category)
-        imdb_data = scrape_imdb(category)
-        merged_data = merge_data(rt_data, imdb_data)
-        top_10_lists[category] = merged_data
+        imdb_movies = scrape_imdb(category, "movies")
+        imdb_series = scrape_imdb(category, "series")
+        top_10_lists[category] = {
+            "movies": merge_data(rt_data, imdb_movies, max_items=10),
+            "series": merge_data(rt_data, imdb_series, max_items=10)
+        }
 
     save_cache(top_10_lists)
     return top_10_lists
@@ -147,13 +162,25 @@ st.write("Updated daily with ratings from IMDb and Rotten Tomatoes")
 top_10_lists = fetch_top_10_lists()
 
 # Display data for each category
-for category, items in top_10_lists.items():
+for category, data in top_10_lists.items():
     st.subheader(category)
-    if items:
-        df = pd.DataFrame(items)
+
+    # Movies
+    st.markdown(f"**Movies**")
+    if data["movies"]:
+        df = pd.DataFrame(data["movies"])
         df.index = df.index + 1  # 1-based indexing
         st.table(df[["title", "imdb", "rotten_tomatoes"]])
     else:
-        st.write("No data available for this category.")
+        st.write("No movies available for this category.")
+
+    # Series
+    st.markdown(f"**TV Series**")
+    if data["series"]:
+        df = pd.DataFrame(data["series"])
+        df.index = df.index + 1  # 1-based indexing
+        st.table(df[["title", "imdb", "rotten_tomatoes"]])
+    else:
+        st.write("No series available for this category.")
 
 st.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
