@@ -47,7 +47,7 @@ if not movies:
     st.write("No recent movies found.")
 for movie in movies:
     st.markdown(f"**{movie['Title']} ({movie['Year']})**")
-    st.markdown(f"IMDb Rating: {movie['IMDb Rating']']}")
+    st.markdown(f"IMDb Rating: {movie['IMDb Rating']}")
     st.markdown(f"[More Info]({movie['Link']})")
     st.markdown("---")
 
