@@ -4,6 +4,17 @@ import requests
 API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # Replace with your TMDB API key
 BASE_URL = "https://api.themoviedb.org/3"
 
+streamlit_style = """
+			<style>
+			@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100&display=swap');
+
+			html, body, [class*="css"]  {
+			font-family: 'Roboto', sans-serif;
+			}
+			</style>
+			"""
+st.markdown(streamlit_style, unsafe_allow_html=True)
+
 st.set_page_config(layout="centered")
 
 # --- Display Top Image ---
