@@ -30,7 +30,7 @@ def fetch_titles(genre_id, media_type='movie'):
     return response.json().get("results", [])[:10]
 
 # --- Page Header ---
-st.markdown("<h1 style='text-align: center;'>🎥 TMD Top rated Movies & TV Series by Genre</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🎥 TMDB Top rated Movies & TV Series by Genre</h1>", unsafe_allow_html=True)
 
 # --- Widget Columns ---
 left, center, right = st.columns([1, 2, 1])
