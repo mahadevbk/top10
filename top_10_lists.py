@@ -131,7 +131,7 @@ else:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if t.get("poster_url"):
-                st.image(t["poster_url"], use_column_width=True)
+                st.image(t["poster_url"], use_container_width=True)
             st.markdown(f"### {idx}. {t['title']} ({t['year']})", unsafe_allow_html=True)
             st.markdown(f"⭐ **Rating**: {t['rating']}")
             if t.get("link"):
