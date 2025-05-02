@@ -1,63 +1,53 @@
 import streamlit as st
-from imdb import IMDb
+import requests
 
-# Initialize IMDb access
-ia = IMDb()
+API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # <-- Replace this with your key
+BASE_URL = "https://api.themoviedb.org/3"
 
-# Map genres to search-friendly IMDb categories
-genre_map = {
-    "Thriller": "thriller",
-    "Medical Dramas": "drama",
-    "Comedy": "comedy",
-    "Murder Mystery": "mystery",
-    "Sci-Fi": "sci-fi"
+GENRES = {
+    "Thriller": 53,
+    "Medical Dramas": 18,  # No strict category for "Medical", so we use Drama
+    "Comedy": 35,
+    "Murder Mystery": 9648,  # Mystery
+    "Sci-Fi": 878
 }
 
-st.title("🎬 Recent Movies and TV Series by Genre")
+def fetch_tmdb_list(genre_id, media_type='movie'):
+    url = f"{BASE_URL}/discover/{media_type}"
+    params = {
+        "api_key": API_KEY,
+        "with_genres": genre_id,
+        "sort_by": "popularity.desc",
+        "language": "en-US",
+        "page": 1,
+        "primary_release_date.gte": "2020-01-01" if media_type == "movie" else None,
+        "first_air_date.gte": "2020-01-01" if media_type == "tv" else None
+    }
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data.get("results", [])[:10]  # Top 10
 
-selected_genre = st.selectbox("Select a Genre", list(genre_map.keys()))
+st.title("🎬 Recent Top Movies & TV Series by Genre (via TMDB API)")
 
-def get_titles_by_genre(genre, content_type='movie'):
-    search_results = ia.get_top250_movies() if content_type == 'movie' else ia.get_top250_tv()
-    titles = []
+genre_name = st.selectbox("Select a Genre", list(GENRES.keys()))
+genre_id = GENRES[genre_name]
 
-    for item in search_results:
-        try:
-            ia.update(item)
-            if 'genres' in item and genre.lower() in [g.lower() for g in item['genres']]:
-                year = item.get('year', 'N/A')
-                if year and int(year) >= 2015:  # Filter recent
-                    titles.append({
-                        "Title": item['title'],
-                        "Year": year,
-                        "IMDb Rating": item.get('rating', 'N/A'),
-                        "Link": f"https://www.imdb.com/title/tt{item.movieID}/"
-                    })
-            if len(titles) >= 10:
-                break
-        except Exception:
-            continue
-
-    return titles
-
-# Display recent Movies
-st.subheader(f"🎬 Top Recent {selected_genre} Movies")
-movies = get_titles_by_genre(genre_map[selected_genre], content_type='movie')
+st.subheader(f"🎬 Top 10 Recent {genre_name} Movies")
+movies = fetch_tmdb_list(genre_id, "movie")
 if not movies:
     st.write("No recent movies found.")
 for movie in movies:
-    st.markdown(f"**{movie['Title']} ({movie['Year']})**")
-    st.markdown(f"IMDb Rating: {movie['IMDb Rating']}")
-    st.markdown(f"[More Info]({movie['Link']})")
+    st.markdown(f"**{movie['title']} ({movie.get('release_date', 'N/A')[:4]})**")
+    st.markdown(f"Rating: {movie.get('vote_average', 'N/A')}/10")
+    st.markdown(f"[View on TMDB](https://www.themoviedb.org/movie/{movie['id']})")
     st.markdown("---")
 
-# Display recent TV Shows
-st.subheader(f"📺 Top Recent {selected_genre} TV Series")
-series = get_titles_by_genre(genre_map[selected_genre], content_type='tv')
+st.subheader(f"📺 Top 10 Recent {genre_name} TV Series")
+series = fetch_tmdb_list(genre_id, "tv")
 if not series:
     st.write("No recent TV shows found.")
 for show in series:
-    st.markdown(f"**{show['Title']} ({show['Year']})**")
-    st.markdown(f"IMDb Rating: {show['IMDb Rating']}")
-    st.markdown(f"[More Info]({show['Link']})")
+    st.markdown(f"**{show['name']} ({show.get('first_air_date', 'N/A')[:4]})**")
+    st.markdown(f"Rating: {show.get('vote_average', 'N/A')}/10")
+    st.markdown(f"[View on TMDB](https://www.themoviedb.org/tv/{show['id']})")
     st.markdown("---")
