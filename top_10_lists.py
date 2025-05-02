@@ -62,7 +62,7 @@ else:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if poster_url:
-                st.image(poster_url, use_column_width=True)
+                st.image(poster_url,  use_container_width=True)
             st.markdown(f"<h4 style='text-align: center;'>{name} ({year})</h4>", unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center;'>⭐ Rating: {rating}/10</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center;'><a href='{link}' target='_blank'>🔗 View on TMDB</a></p>", unsafe_allow_html=True)
