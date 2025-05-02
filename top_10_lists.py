@@ -46,7 +46,7 @@ st.markdown(f"<h2 style='text-align: center;'>Top 10 {genre_name} {'Movies' if m
 from datetime import datetime
 # Add timestamp just before showing titles
 now = datetime.now().strftime("%B %d, %Y at %I:%M %p")
-st.markdown(f"<p style='text-align: center;'><em>Updated on: {now}</em></p>", unsafe_allow_html=True)
+st.markdown(f"<p style='text-align: center;'><em>Updated on: UTC {now}</em></p>", unsafe_allow_html=True)
 
 # --- Display Results ---
 titles = fetch_titles(genre_id, media_type)
