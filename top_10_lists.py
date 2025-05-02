@@ -4,6 +4,18 @@ import requests
 # Display the poster image at the top
 st.image("top10image.png", use_container_width=223)
 
+st.set_page_config(layout="centered")
+
+# Custom CSS to center text
+st.markdown("""
+    <style>
+    .centered {
+        text-align: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # <-- Insert your TMDB API key here
 BASE_URL = "https://api.themoviedb.org/3"
 
