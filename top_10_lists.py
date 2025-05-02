@@ -7,7 +7,7 @@ BASE_URL = "https://api.themoviedb.org/3"
 st.set_page_config(page_title="Top 10 Movies & TV", layout="centered")
 
 # --- Display Top Image ---
-st.image("top10image.png")  # <-- Add your top image file path here
+# st.image("top10image.png")  # <-- Add your top image file path here
 
 @st.cache_data
 def fetch_genres(media_type='movie'):
