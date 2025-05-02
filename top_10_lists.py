@@ -38,54 +38,80 @@ def clean_title(title):
 def get_imdb_top(category, media_type="movie"):
     """Get top 10 from IMDb by category and media type"""
     base_url = "https://www.imdb.com/search/title/"
+    genre_map = {
+        "Action": "action",
+        "Comedy": "comedy",
+        "Drama": "drama",
+        "Sci-Fi": "sci-fi",
+        "Thriller": "thriller"
+    }
+    
     params = {
         "title_type": "feature" if media_type == "movie" else "tv_series",
-        "genres": category.lower(),
+        "genres": genre_map.get(category, category.lower()),
         "sort": "user_rating,desc",
         "count": 10
     }
     
     try:
-        response = requests.get(base_url, params=params, headers=HEADERS)
+        response = requests.get(base_url, params=params, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
         
         results = []
-        items = soup.select(".lister-item-content")[:10]
+        items = soup.select(".lister-item")[:10]
         
         for item in items:
-            title = item.find("h3").find("a").text.strip()
-            rating = item.find("div", class_="ratings-imdb-rating")
-            rating = rating.find("strong").text.strip() if rating else "N/A"
-            results.append({"title": title, "rating": rating})
+            title_elem = item.find("h3", class_="lister-item-header")
+            title = title_elem.find("a").text.strip() if title_elem else "N/A"
+            
+            rating_elem = item.find("div", class_="ratings-imdb-rating")
+            rating = rating_elem.find("strong").text.strip() if rating_elem else "N/A"
+            
+            if title != "N/A":
+                results.append({
+                    "title": title,
+                    "imdb": rating,
+                    "source": "IMDb"
+                })
         
         return results
     except Exception as e:
-        st.error(f"IMDB {category} {media_type} error: {str(e)}")
+        st.error(f"IMDb {category} {media_type} error: {str(e)}")
         return []
-
-def get_tmdb_top(category, media_type="movie"):
-    """Get top rated from TMDB API (requires API key)"""
-    # This is a placeholder - you would need to register for a free API key
-    # and implement proper API calls here
-    return []
 
 def get_rotten_tomatoes_top(category, media_type="movie"):
     """Get top from Rotten Tomatoes"""
+    genre_map = {
+        "Action": "action__adventure",
+        "Comedy": "comedy",
+        "Drama": "drama",
+        "Sci-Fi": "science_fiction__fantasy",
+        "Thriller": "mystery__thriller"
+    }
+    
     media_path = "movies" if media_type == "movie" else "tv"
-    url = f"https://www.rottentomatoes.com/browse/{media_path}_at_home/genres:{category.lower()}"
+    url = f"https://www.rottentomatoes.com/browse/{media_path}_at_home/sort:popular?genres={genre_map.get(category, category.lower())}"
     
     try:
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
         
         results = []
         tiles = soup.select("div[data-qa='discovery-media-list-item']")[:10]
         
         for tile in tiles:
-            title = tile.find("span", {"data-qa": "discovery-media-list-item-title"}).text.strip()
+            title_elem = tile.find("span", {"data-qa": "discovery-media-list-item-title"})
+            title = title_elem.text.strip() if title_elem else "N/A"
+            
             score = tile.find("score-pairs")
-            rating = score["criticsscore"] if score else "N/A"
-            results.append({"title": title, "rating": f"{rating}%" if rating != "N/A" else rating})
+            rating = score["criticsscore"] if score and "criticsscore" in score.attrs else "N/A"
+            
+            if title != "N/A":
+                results.append({
+                    "title": title,
+                    "rotten_tomatoes": f"{rating}%" if rating != "N/A" else rating,
+                    "source": "Rotten Tomatoes"
+                })
         
         return results
     except Exception as e:
@@ -98,33 +124,42 @@ def merge_sources(movie_data, tv_data):
     combined = defaultdict(dict)
     
     # Process movie data
-    for category, sources in movie_data.items():
-        titles = set()
-        merged = []
+    for category in CATEGORIES:
+        # Movies
+        all_movies = []
+        seen_titles = set()
         
-        # Combine all sources for this category
-        for source in sources.values():
+        for source in movie_data[category].values():
             for item in source:
                 clean = clean_title(item["title"])
-                if clean not in titles:
-                    merged.append(item)
-                    titles.add(clean)
+                if clean not in seen_titles:
+                    merged_item = {
+                        "title": item["title"],
+                        "imdb": item.get("imdb", "N/A"),
+                        "rotten_tomatoes": item.get("rotten_tomatoes", "N/A")
+                    }
+                    all_movies.append(merged_item)
+                    seen_titles.add(clean)
         
-        combined[category]["movies"] = merged[:10]
-    
-    # Process TV data
-    for category, sources in tv_data.items():
-        titles = set()
-        merged = []
+        combined[category]["movies"] = all_movies[:10]
         
-        for source in sources.values():
+        # TV Series
+        all_series = []
+        seen_titles = set()
+        
+        for source in tv_data[category].values():
             for item in source:
                 clean = clean_title(item["title"])
-                if clean not in titles:
-                    merged.append(item)
-                    titles.add(clean)
+                if clean not in seen_titles:
+                    merged_item = {
+                        "title": item["title"],
+                        "imdb": item.get("imdb", "N/A"),
+                        "rotten_tomatoes": item.get("rotten_tomatoes", "N/A")
+                    }
+                    all_series.append(merged_item)
+                    seen_titles.add(clean)
         
-        combined[category]["series"] = merged[:10]
+        combined[category]["series"] = all_series[:10]
     
     return combined
 
@@ -159,7 +194,9 @@ def main():
     """)
     
     if st.button("Refresh Data"):
-        st.cache_data.clear()
+        if os.path.exists(CACHE_FILE):
+            os.remove(CACHE_FILE)
+        st.experimental_rerun()
     
     data = fetch_all_data()
     
@@ -174,7 +211,7 @@ def main():
             if movies:
                 df = pd.DataFrame(movies)
                 df.index = df.index + 1
-                st.table(df)
+                st.table(df[["title", "imdb", "rotten_tomatoes"]])
             else:
                 st.warning("No movie data available")
         
@@ -184,7 +221,7 @@ def main():
             if series:
                 df = pd.DataFrame(series)
                 df.index = df.index + 1
-                st.table(df)
+                st.table(df[["title", "imdb", "rotten_tomatoes"]])
             else:
                 st.warning("No TV series data available")
     
