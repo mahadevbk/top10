@@ -4,10 +4,10 @@ import requests
 API_KEY = "a7cb59b552915493b4103cd95c5285dd"  # Replace with your TMDB API key
 BASE_URL = "https://api.themoviedb.org/3"
 
-st.set_page_config(layout="centered")
+st.set_page_config(page_title="Top 10 Movies & TV", layout="centered")
 
 # --- Display Top Image ---
-st.image("top10image.png", use_container_width=True)  # <-- Add your top image file path here
+st.image("top10image.png", use_container_width=233)  # <-- Add your top image file path here
 
 @st.cache_data
 def fetch_genres(media_type='movie'):
