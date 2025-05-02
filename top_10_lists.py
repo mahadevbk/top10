@@ -44,9 +44,14 @@ with center:
 st.markdown(f"<h2 style='text-align: center;'>Top 10 {genre_name} {'Movies' if media_type == 'movie' else 'TV Series'}</h2>", unsafe_allow_html=True)
 
 from datetime import datetime
-# Add timestamp just before showing titles
-now = datetime.now().strftime("%B %d, %Y at %I:%M %p")
-st.markdown(f"<p style='text-align: center;'><em>Updated on: UTC {now}</em></p>", unsafe_allow_html=True)
+from zoneinfo import ZoneInfo  # Available in Python 3.9+
+
+# Get current time in UTC+4
+now_utc4 = datetime.now(ZoneInfo("Etc/GMT-4"))  # "Etc/GMT-4" actually means UTC+4
+formatted_time = now_utc4.strftime("%B %d, %Y at %I:%M %p")
+
+st.markdown(f"<p style='text-align: center;'><em>Updated on: {formatted_time} (UTC+4)</em></p>", unsafe_allow_html=True)
+
 
 # --- Display Results ---
 titles = fetch_titles(genre_id, media_type)
