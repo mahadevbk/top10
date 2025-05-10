@@ -137,3 +137,5 @@ else:
             if t.get("link"):
                 st.markdown(f"[🔗 More Info]({t['link']})")
             st.markdown("---")
+
+st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
